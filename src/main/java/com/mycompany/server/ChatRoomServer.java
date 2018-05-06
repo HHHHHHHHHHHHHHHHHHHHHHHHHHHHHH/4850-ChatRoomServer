@@ -12,9 +12,10 @@ import java.io.IOException;
  * @author dh
  */
 public class ChatRoomServer {
+
     public static void main(String[] args) throws IOException {
-        Server server=new Server(14727);
+        Server server = new Server(14727);
         System.out.println("Waiting for a client to connect...");
-        
+
     }
 }
