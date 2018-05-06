@@ -5,7 +5,13 @@
  */
 package com.mycompany.server;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
@@ -19,11 +25,11 @@ import java.util.logging.Logger;
  *
  * @author dh
  */
-public class Server {
+public final class Server {
 
     final int MAXCLIENTS = 3;
 
-    public int num=0;
+    public int num = 0;
     public ArrayList<String> clientIDList;
     public ArrayList<ConnectionToClient> clientList;
     private LinkedBlockingQueue<Object> messages;
@@ -39,10 +45,7 @@ public class Server {
         messages = new LinkedBlockingQueue<>();
         serverSocket = new ServerSocket(port);
 
-        userList.add(new UserList("Tom", "Tom11"));
-        userList.add(new UserList("David", "David22"));
-        userList.add(new UserList("Beth", "Beth33"));
-        userList.add(new UserList("John", "John44"));
+        readFile(userList);
 
         Thread accept = new Thread() {
             @Override
@@ -52,7 +55,7 @@ public class Server {
                     try {
                         Socket s = serverSocket.accept();
                         clientList.add(new ConnectionToClient(s));
-                        
+
                     } catch (IOException e) {
                     }
                 }
@@ -72,26 +75,25 @@ public class Server {
                         // Do some handling here...
 
                         //System.out.println("Server Received: " + message);
-
                         String[] buff = stringGuide((String) message);
                         if (buff == null) {
                             System.out.println("Wrong input!");
-                            
+
                         } else {
                             boolean flag = false;
-                            
+
                             String username = buff[buff.length - 2];
-                            
+
                             int userid = clientIDList.indexOf(username);
                             while (userid == -1) {
                                 userid = clientIDList.indexOf(username);
-                                
+
                             }
 
-                            if (num >= MAXCLIENTS&&userList.get(userid).askLogin()==false) {
+                            if (num >= MAXCLIENTS && userList.get(userid).askLogin() == false) {
                                 sendToOne(userid, "You cannot login because the room can only contain 3 people.");
                                 clientIDList.remove(userid);
-                                System.out.println(userid+" is removed.");
+                                System.out.println(username + " is removed.");
                             } /////////
                             else if ("login".equals(buff[0])) {
 
@@ -99,11 +101,11 @@ public class Server {
 
                                     if (userList.get(i).askUser(buff[1], buff[2]) == true) {
 
-                                        if(userList.get(i).askLogin() == false){
-                                        flag = true;
-                                        userList.get(i).setLogin(true);
-                                        }
-                                        else{
+                                        if (userList.get(i).askLogin() == false) {
+                                            flag = true;
+                                            userList.get(i).setLogin(true);
+
+                                        } else {
                                             sendToOne(userid, "You have already logged in, don't try to login again, please.");
                                         }
 
@@ -112,14 +114,14 @@ public class Server {
                                 }
 
                                 if (flag == true) {
-
+                                    System.out.println(username + " log in.");
                                     sendToOne(userid, "Login success!");
                                     sendToAll(username + " come in.");
                                     num++;
                                 } else {
                                     sendToOne(userid, "Login failed, please check you name and password.");
                                     clientIDList.remove(userid);
-                                System.out.println(userid+" is removed.");
+                                    System.out.println(userid + " is removed.");
                                 }
 
                             } //login user pwd
@@ -131,8 +133,9 @@ public class Server {
 
                                 }
                                 if (flag == true) {
+                                    System.out.println(username + " send all: " + buff[1]);
                                     sendToAll(username + " to everyone :" + buff[1]);
-                                    sendToOne(userid, "You send message to all in succeed.");
+                                    //sendToOne(userid, "You send message to all in succeed.");
                                 } else {
                                     sendToOne(userid, "You failed to send message to all.");
                                 }
@@ -147,7 +150,8 @@ public class Server {
                                 }
                                 if (flag == true) {
                                     if (clientIDList.indexOf(buff[1]) != -1) {
-                                        sendToOne(userid, "You send message in succeed.");
+                                        System.out.println(username + " send " + clientIDList.indexOf(buff[1]) + ": " + buff[2]);
+                                        //sendToOne(userid, "You send message in succeed.");
                                         sendToOne(clientIDList.indexOf(buff[1]), username + " : " + buff[2]);
                                     } else {
                                         sendToOne(userid, "There is no this person or it is not in the room.");
@@ -168,11 +172,12 @@ public class Server {
                                     String result = "";
                                     for (String object : clientIDList) {
                                         if (!"".equals(object)) {
-                                            result += object + ", ";
+                                            result += object + "; ";
                                         }
                                     }
-                                    sendToOne(userid, "You asked who is in the room.");
-                                    sendToOne(userid, result + " is in the room.");
+                                    System.out.println(username + " asks who is in the room.");
+                                    //sendToOne(userid, "You asked who is in the room.");
+                                    sendToOne(userid, result + " are in the room.");
                                 } else {
                                     sendToOne(userid, "You should login first!");
                                 }
@@ -183,7 +188,7 @@ public class Server {
                                     if (userList.get(i).askUser(buff[1], buff[2]) && userList.get(i).askLogin() == true) {
                                         flag = true;
                                         userList.get(i).setLogin(false);
-                                        
+
                                     }
 
                                 }
@@ -192,11 +197,11 @@ public class Server {
                                     //clientIDList.set(userid, "");
                                     clientIDList.remove(userid);
                                     clientList.remove(userid);
-                                System.out.println(userid+" is removed.");
+                                    //System.out.println(userid+" is removed.");
                                     //clientList.remove(userid);
                                     num--;
                                     sendToAll(username + " leave from the room.");
-
+                                    System.out.println(username + " log out.");
                                 } else {
                                     sendToOne(userid, "You should login first!");
                                 }
@@ -204,20 +209,19 @@ public class Server {
                             } //logout name pwd
                             else if ("newuser".equals(buff[0])) {
                                 userList.add(new UserList(buff[1], buff[2]));
-                                System.out.println("new user name is "+userList.get(userList.size()-1).name);
-                                System.out.println("new user password is "+userList.get(userList.size()-1).password);
+                                writeFile(buff[1], buff[2]);
                                 sendToOne(userid, "Your account is build well!");
                                 clientIDList.remove(userid);
-                                System.out.println(userid+" is removed.");
-                            }
-                            //newuser name Password
-                            else
-                            {
+                                System.out.println("An account with username '" + buff[1] + "' is created.");
+                            } //newuser name Password
+                            else {
                                 System.out.println("Nothing!");
                             }
                         }
 
                     } catch (InterruptedException e) {
+                    } catch (IOException ex) {
+                        Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 }
             }
@@ -250,15 +254,13 @@ public class Server {
                             String[] buff = ((String) obj).split(" ");
                             if (buff != null) {
 
-                                if ("login".equals(buff[0])||"newuser".equals(buff[0])) {
+                                if ("login".equals(buff[0]) || "newuser".equals(buff[0])) {
                                     clientIDList.add(buff[buff.length - 2]);
-                                    System.out.println(buff[buff.length - 2]+" get his ID-> "+(clientIDList.size()-1));
+                                    //System.out.println(buff[buff.length - 2]+" get his ID-> "+(clientIDList.size()-1));
                                 }
-                                
 
-                            }
-                            else{
-                                System.out.println("Useless input: "+(String)obj);
+                            } else {
+                                System.out.println("Useless input: " + (String) obj);
                             }
 
                         } catch (IOException e) {
@@ -332,6 +334,38 @@ public class Server {
         });
     }
 
+    public void writeFile(String name, String password) throws IOException {
+
+        try {
+            try ( // 打开一个写文件器，构造函数中的第二个参数true表示以追加形式写文件
+                    FileWriter writer = new FileWriter("./user.txt", true)) {
+                writer.write(name + " " + password + "\n");
+            }
+        } catch (IOException e) {
+        }
+
+    }
+
+    public void readFile(ArrayList<UserList> userLists) throws FileNotFoundException, IOException {
+        String pathname = "./user.txt";
+        File filename = new File(pathname);
+        InputStreamReader reader = new InputStreamReader(
+                new FileInputStream(filename));
+        BufferedReader br = new BufferedReader(reader);
+        String line;
+
+        while (true) {
+            line = br.readLine();
+            if (line != null) {
+                String[] buff = line.split(" ");
+                userLists.add(new UserList(buff[0], buff[1]));
+            } else {
+                break;
+            }
+        }
+
+    }
+
     private String[] stringGuide(String str) {
         String[] buff = str.split(" ");
         switch (buff[0]) {
@@ -361,7 +395,7 @@ public class Server {
                 }
                 break;
             case "newuser":
-                if(buff.length != 3) {
+                if (buff.length != 3) {
                     return null;
                 }
                 break;
@@ -369,7 +403,7 @@ public class Server {
                 return null;
 
         }
-       
+
         return buff;
     }
 }
