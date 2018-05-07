@@ -77,7 +77,7 @@ public final class Server {
                         //System.out.println("Server Received: " + message);
                         String[] buff = stringGuide((String) message);
                         if (buff == null) {
-                            System.out.println("Wrong input!");
+                            System.out.println("Wrong input: " + message);
 
                         } else {
                             boolean flag = false;
@@ -93,7 +93,6 @@ public final class Server {
                             if (num >= MAXCLIENTS && userList.get(userid).askLogin() == false) {
                                 sendToOne(userid, "You cannot login because the room can only contain 3 people.");
                                 clientIDList.remove(userid);
-                                System.out.println(username + " is removed.");
                             } /////////
                             else if ("login".equals(buff[0])) {
 
@@ -121,7 +120,6 @@ public final class Server {
                                 } else {
                                     sendToOne(userid, "Login failed, please check you name and password.");
                                     clientIDList.remove(userid);
-                                    System.out.println(userid + " is removed.");
                                 }
 
                             } //login user pwd
@@ -175,9 +173,9 @@ public final class Server {
                                             result += object + "; ";
                                         }
                                     }
-                                    System.out.println(username + " asks who is in the room.");
+                                    System.out.println(username + " ask who is in this room.");
                                     //sendToOne(userid, "You asked who is in the room.");
-                                    sendToOne(userid, result + " are in the room.");
+                                    sendToOne(userid, "People in this room: " + result);
                                 } else {
                                     sendToOne(userid, "You should login first!");
                                 }
@@ -197,11 +195,11 @@ public final class Server {
                                     //clientIDList.set(userid, "");
                                     clientIDList.remove(userid);
                                     clientList.remove(userid);
-                                    //System.out.println(userid+" is removed.");
                                     //clientList.remove(userid);
                                     num--;
                                     sendToAll(username + " leave from the room.");
                                     System.out.println(username + " log out.");
+                                    
                                 } else {
                                     sendToOne(userid, "You should login first!");
                                 }
@@ -352,13 +350,15 @@ public final class Server {
         InputStreamReader reader = new InputStreamReader(
                 new FileInputStream(filename));
         BufferedReader br = new BufferedReader(reader);
-        String line;
-
+        String line = null;
+        UserList ul;
         while (true) {
             line = br.readLine();
-            if (line != null) {
+            if (!"".equals(line) && line != null) {
                 String[] buff = line.split(" ");
-                userLists.add(new UserList(buff[0], buff[1]));
+                ul = new UserList(buff[0], buff[1]);
+                userLists.add(ul);
+
             } else {
                 break;
             }
