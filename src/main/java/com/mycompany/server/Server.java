@@ -1,7 +1,21 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
+/**
+ * Name: Ding Hao
+ * Date: 5/1/2018
+ * Description:
+ *     It is the server part of the ChatRoom Program.
+ * Help:
+ *     newuser username userpassword: create a new account
+ *
+ *     login username userpassword: login an account with username and password
+ *
+ *     send someone message: send message to someone
+ *
+ *     send all: send everyone a message
+ *
+ *     who: show you who are in this chatroom
+ *
+ *     logout: logout from the account and close the client
+ *
  */
 package com.mycompany.server;
 
@@ -17,6 +31,7 @@ import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -27,26 +42,31 @@ import java.util.logging.Logger;
  */
 public final class Server {
 
+    /**
+     * Difinition or initializations
+     */
     final int MAXCLIENTS = 3;
-
     public int num = 0;
-    public ArrayList<String> clientIDList;
     public ArrayList<ConnectionToClient> clientList;
     private LinkedBlockingQueue<Object> messages;
     private ServerSocket serverSocket;
-
-    //private UserList[] userList = new UserList[4];
     private ArrayList<UserList> userList;
 
     public Server(int port) throws IOException {
         userList = new ArrayList<>();
-        clientIDList = new ArrayList<>();
         clientList = new ArrayList<>();
         messages = new LinkedBlockingQueue<>();
         serverSocket = new ServerSocket(port);
 
+        /**
+         * read user data from a file
+         */
         readFile(userList);
 
+        /**
+         * accept socket from client(s)
+         *
+         */
         Thread accept = new Thread() {
             @Override
             public void run() {
@@ -54,7 +74,8 @@ public final class Server {
                 while (true) {
                     try {
                         Socket s = serverSocket.accept();
-                        clientList.add(new ConnectionToClient(s));
+                        int id = (int) System.currentTimeMillis() % 100;
+                        clientList.add(new ConnectionToClient(s, id));
 
                     } catch (IOException e) {
                     }
@@ -62,9 +83,12 @@ public final class Server {
             }
         };
 
-        //accept.setDaemon(true);
         accept.start();
 
+        /**
+         * make different actions according to different shells
+         *
+         */
         Thread messageHandling = new Thread() {
             @Override
             public void run() {
@@ -72,147 +96,172 @@ public final class Server {
                     try {
 
                         Object message = messages.take();
-                        // Do some handling here...
-
-                        //System.out.println("Server Received: " + message);
                         String[] buff = stringGuide((String) message);
                         if (buff == null) {
-                            System.out.println("Wrong input: " + message);
+                            System.out.println("Wrong input: " + message);//check message style
 
                         } else {
                             boolean flag = false;
 
-                            String username = buff[buff.length - 2];
-
-                            int userid = clientIDList.indexOf(username);
-                            while (userid == -1) {
-                                userid = clientIDList.indexOf(username);
-
+                            /**
+                             * get client
+                             *
+                             *
+                             */
+                            Integer userid = Integer.parseInt(buff[buff.length - 1]);
+                            ConnectionToClient user = getConnect(userid);
+                            while (user == null) {
+                                System.out.println("user = null");
+                                user = getConnect(userid);
                             }
+                            /**
+                             * Check if there is too many people in the room.
+                             *
+                             */
+                            if (num >= MAXCLIENTS && user.askLogin() == false) {
+                                sendToOne(user, "You cannot login because the room can only contain 3 people.");
 
-                            if (num >= MAXCLIENTS && userList.get(userid).askLogin() == false) {
-                                sendToOne(userid, "You cannot login because the room can only contain 3 people.");
-                                clientIDList.remove(userid);
-                            } /////////
+                            } /**
+                             * login
+                             */
                             else if ("login".equals(buff[0])) {
-
+                                boolean exist=false;
                                 for (int i = 0; i < userList.size(); i++) {
 
                                     if (userList.get(i).askUser(buff[1], buff[2]) == true) {
 
-                                        if (userList.get(i).askLogin() == false) {
+                                        for(int j=0;j<clientList.size();j++){
+                                            if(clientList.get(j).getName() == null ? buff[1] == null : clientList.get(j).getName().equals(buff[1]))
+                                                exist=true;
+                                        }
+                                        if (exist == false) {
                                             flag = true;
-                                            userList.get(i).setLogin(true);
+                                            user.setName(buff[1]);
+                                            user.setLogin(true);
 
                                         } else {
-                                            sendToOne(userid, "You have already logged in, don't try to login again, please.");
+                                            flag = true;
+                                            sendToOne(user, "You have already logged in, don't try to login again, please.");
                                         }
 
                                     }
 
                                 }
-
-                                if (flag == true) {
-                                    System.out.println(username + " log in.");
-                                    sendToOne(userid, "Login success!");
-                                    sendToAll(username + " come in.");
+                                if (flag == true && exist==false) {
+                                    System.out.println(buff[1] + " log in.");
+                                    sendToOne(user, "Login success!");
+                                    sendToAll(buff[1] + " come in.");
                                     num++;
-                                } else {
-                                    sendToOne(userid, "Login failed, please check you name and password.");
-                                    clientIDList.remove(userid);
+                                } else if(exist!=true){
+                                    sendToOne(user, "Login failed, please check you name and password.");
+
                                 }
 
-                            } //login user pwd
+                            } /**
+                             * sendall
+                             */
                             else if ("sendall".equals(buff[0])) {
                                 for (int i = 0; i < userList.size(); i++) {
-                                    if (userList.get(i).askUser(buff[2], buff[3]) && userList.get(i).askLogin() == true) {
+                                    if (userList.get(i).askUser(buff[2], buff[3]) && user.askLogin() == true) {
                                         flag = true;
                                     }
 
                                 }
                                 if (flag == true) {
-                                    System.out.println(username + " send all: " + buff[1]);
-                                    sendToAll(username + " to everyone :" + buff[1]);
+                                    System.out.println(user.getName() + " send all: " + buff[1]);
+                                    sendToAll(user.getName() + " to everyone :" + buff[1]);
                                     //sendToOne(userid, "You send message to all in succeed.");
                                 } else {
-                                    sendToOne(userid, "You failed to send message to all.");
+                                    sendToOne(user, "You failed to send message to all.");
                                 }
 
-                            } //sendall msg name pwd
+                            } /**
+                             * send
+                             */
                             else if ("send".equals(buff[0])) {
+                                ConnectionToClient him = null;
                                 for (int i = 0; i < userList.size(); i++) {
-                                    if (userList.get(i).askUser(buff[3], buff[4]) && userList.get(i).askLogin() == true) {
+                                    if (userList.get(i).askUser(buff[3], buff[4]) && user.askLogin() == true) {
                                         flag = true;
                                     }
 
                                 }
+                                for (int i = 0; i < clientList.size(); i++) {
+                                    
+                                    if (clientList.get(i).getName() == null ? buff[1] == null : clientList.get(i).getName().equals(buff[1])) {
+                                        if (clientList.get(i).askLogin() == true) {
+                                            him = clientList.get(i);
+                                        }
+                                    }
+                                }
                                 if (flag == true) {
-                                    if (clientIDList.indexOf(buff[1]) != -1) {
-                                        System.out.println(username + " send " + clientIDList.indexOf(buff[1]) + ": " + buff[2]);
-                                        //sendToOne(userid, "You send message in succeed.");
-                                        sendToOne(clientIDList.indexOf(buff[1]), username + " : " + buff[2]);
+                                    if (him != null) {
+                                        System.out.println(user.getName() + " send " + him.getName() + ": " + buff[2]);
+                                        sendToOne(him, user.getName() + " : " + buff[2]);
                                     } else {
-                                        sendToOne(userid, "There is no this person or it is not in the room.");
+                                        sendToOne(user, "There is no this person or it is not in the room.");
                                     }
                                 } else {
-                                    sendToOne(userid, "You should login first!");
+                                    sendToOne(user, "You should login first!");
                                 }
 
-                            } //send someone msg name pwd
+                            } /**
+                             * who
+                             */
                             else if ("who".equals(buff[0])) {
                                 for (int i = 0; i < userList.size(); i++) {
-                                    if (userList.get(i).askUser(buff[1], buff[2]) && userList.get(i).askLogin() == true) {
+                                    if (userList.get(i).askUser(buff[1], buff[2]) && user.askLogin() == true) {
                                         flag = true;
                                     }
 
                                 }
                                 if (flag == true) {
                                     String result = "";
-                                    for (String object : clientIDList) {
-                                        if (!"".equals(object)) {
-                                            result += object + "; ";
+                                    for (int i = 0; i < clientList.size(); i++) {
+                                        if (clientList.get(i).askLogin() == true) {
+                                            result += clientList.get(i).getName() + "; ";
                                         }
                                     }
-                                    System.out.println(username + " ask who is in this room.");
-                                    //sendToOne(userid, "You asked who is in the room.");
-                                    sendToOne(userid, "People in this room: " + result);
+                                    System.out.println(user.getName() + " ask who is in this room.");
+                                    sendToOne(user, "People in this room: " + result);
                                 } else {
-                                    sendToOne(userid, "You should login first!");
+                                    sendToOne(user, "You should login first!");
                                 }
 
-                            } //who name pwd
+                            } /**
+                             * logout
+                             *
+                             */
                             else if ("logout".equals(buff[0])) {
                                 for (int i = 0; i < userList.size(); i++) {
-                                    if (userList.get(i).askUser(buff[1], buff[2]) && userList.get(i).askLogin() == true) {
+                                    if (userList.get(i).askUser(buff[1], buff[2]) && user.askLogin() == true) {
                                         flag = true;
-                                        userList.get(i).setLogin(false);
+                                        user.setLogin(false);
 
                                     }
 
                                 }
                                 if (flag == true) {
-                                    sendToOne(userid, "You log out!");
-                                    //clientIDList.set(userid, "");
-                                    clientIDList.remove(userid);
-                                    clientList.remove(userid);
-                                    //clientList.remove(userid);
+                                    sendToOne(user, "You log out!");
                                     num--;
-                                    sendToAll(username + " leave from the room.");
-                                    System.out.println(username + " log out.");
-                                    
+                                    sendToAll(user.getName() + " leave from the room.");
+                                    System.out.println(user.getName() + " log out.");
+                                    user.cleanName();
+                                    user.setLogin(false);
+
                                 } else {
-                                    sendToOne(userid, "You should login first!");
+                                    sendToOne(user, "You should login first!");
                                 }
 
-                            } //logout name pwd
+                            } /**
+                             * newuser
+                             */
                             else if ("newuser".equals(buff[0])) {
                                 userList.add(new UserList(buff[1], buff[2]));
                                 writeFile(buff[1], buff[2]);
-                                sendToOne(userid, "Your account is build well!");
-                                clientIDList.remove(userid);
+                                sendToOne(user, "Your account is build well!");
                                 System.out.println("An account with username '" + buff[1] + "' is created.");
-                            } //newuser name Password
-                            else {
+                            } else {
                                 System.out.println("Nothing!");
                             }
                         }
@@ -225,22 +274,59 @@ public final class Server {
             }
         };
 
-        //messageHandling.setDaemon(true);
         messageHandling.start();
     }
 
+    public ConnectionToClient getConnect(Integer id) {
+        for (int i = 0; i < clientList.size(); i++) {
+            if (Objects.equals(clientList.get(i).id, id)) {
+                return clientList.get(i);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The class to connect to client.
+     */
     private class ConnectionToClient {
 
         ObjectInputStream in;
         ObjectOutputStream out;
         Socket socket;
-        public String name;
+        String name;
+        Integer id;
+        Boolean login;
 
-        ConnectionToClient(Socket socket) throws IOException {
+        public void cleanName(){
+            this.name=null;
+            this.login=false;
+        }
+        public void setLogin(boolean login) {
+            this.login = login;
+        }
+
+        public boolean askLogin() {
+            return this.login;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        ConnectionToClient(Socket socket, int id) throws IOException {
+
             this.socket = socket;
             in = new ObjectInputStream(socket.getInputStream());
             out = new ObjectOutputStream(socket.getOutputStream());
-
+            login = false;
+            name = null;
+            this.id = id;
             Thread read = new Thread() {
 
                 @Override
@@ -248,15 +334,13 @@ public final class Server {
                     while (true) {
                         try {
                             Object obj = in.readObject();
-                            messages.put(obj);
+
                             String[] buff = ((String) obj).split(" ");
                             if (buff != null) {
+                                //add id to the shell
 
-                                if ("login".equals(buff[0]) || "newuser".equals(buff[0])) {
-                                    clientIDList.add(buff[buff.length - 2]);
-                                    //System.out.println(buff[buff.length - 2]+" get his ID-> "+(clientIDList.size()-1));
-                                }
-
+                                obj = (String) obj + " " + id;
+                                messages.put(obj);
                             } else {
                                 System.out.println("Useless input: " + (String) obj);
                             }
@@ -271,11 +355,15 @@ public final class Server {
 
             };
 
-            //read.setDaemon(true); // terminate when main ends
             read.start();
 
         }
 
+        /**
+         * write sth
+         *
+         * @param obj
+         */
         public void write(Object obj) {
             try {
                 out.writeObject(obj);
@@ -285,17 +373,26 @@ public final class Server {
 
     }
 
+    /**
+     * The class to opreate on userdata
+     *
+     */
     private class UserList {
 
         private String name = "";
         private String password = "";
-        private Boolean login = false;
 
         public UserList(String name, String password) {
             this.name = name;
             this.password = password;
         }
 
+        /**
+         * set value into the user data
+         *
+         * @param name
+         * @param password
+         */
         public void setUser(String name, String password) {
 
             this.name = name;
@@ -303,39 +400,52 @@ public final class Server {
 
         }
 
-        public void setLogin(Boolean login) {
-
-            this.login = login;
-
-        }
-
+        /**
+         * to know if the name with password is a right pair
+         *
+         * @param name
+         * @param password
+         * @return
+         */
         public boolean askUser(String name, String password) {
 
             return this.name.equals(name) && this.password.equals(password);
         }
 
-        public boolean askLogin() {
-
-            return this.login;
-        }
-
     }
 
-    public void sendToOne(int index, Object message) {
+    /**
+     * send a message to someone
+     *
+     * @param message
+     */
+    public void sendToOne(ConnectionToClient user, Object message) {
 
-        clientList.get(index).write(message);
+        user.write(message);
     }
 
+    /**
+     * send the same message to every one
+     *
+     * @param message
+     */
     public void sendToAll(Object message) {
         clientList.forEach((client) -> {
             client.write(message);
         });
     }
 
+    /**
+     * write the newuser info. to the user file
+     *
+     * @param name
+     * @param password
+     * @throws IOException
+     */
     public void writeFile(String name, String password) throws IOException {
 
         try {
-            try ( // 打开一个写文件器，构造函数中的第二个参数true表示以追加形式写文件
+            try (
                     FileWriter writer = new FileWriter("./user.txt", true)) {
                 writer.write(name + " " + password + "\n");
             }
@@ -344,6 +454,13 @@ public final class Server {
 
     }
 
+    /**
+     * read user lists from the file
+     *
+     * @param userLists
+     * @throws FileNotFoundException
+     * @throws IOException
+     */
     public void readFile(ArrayList<UserList> userLists) throws FileNotFoundException, IOException {
         String pathname = "./user.txt";
         File filename = new File(pathname);
@@ -366,36 +483,42 @@ public final class Server {
 
     }
 
+    /**
+     * to know wether a shell is legal for the program
+     *
+     * @param str
+     * @return
+     */
     private String[] stringGuide(String str) {
         String[] buff = str.split(" ");
         switch (buff[0]) {
             case "login":
-                if (buff.length != 3) {
-                    return null;
-                }
-                break;
-            case "sendall":
                 if (buff.length != 4) {
                     return null;
                 }
                 break;
-            case "send":
+            case "sendall":
                 if (buff.length != 5) {
                     return null;
                 }
                 break;
+            case "send":
+                if (buff.length != 6) {
+                    return null;
+                }
+                break;
             case "who":
-                if (buff.length != 3) {
+                if (buff.length != 4) {
                     return null;
                 }
                 break;
             case "logout":
-                if (buff.length != 3) {
+                if (buff.length != 4) {
                     return null;
                 }
                 break;
             case "newuser":
-                if (buff.length != 3) {
+                if (buff.length != 4) {
                     return null;
                 }
                 break;
@@ -406,4 +529,5 @@ public final class Server {
 
         return buff;
     }
+
 }
